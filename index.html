@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Autonomous World — 3D Civilization</title>
+  <style>
+    :root {
+      --bg-glass: rgba(15, 23, 42, 0.88);
+      --bg-panel: rgba(30, 41, 59, 0.96);
+      --bg-card: rgba(51, 65, 85, 0.68);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #4ade80;
+      --warn: #fbbf24;
+      --danger: #f87171;
+      --border: rgba(148, 163, 184, 0.24);
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background-color: #0f172a; font-family: var(--font); color: var(--text-main);
+      touch-action: none;
+    }
+
+    #canvas-container {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      width: 100vw; height: 100vh; z-index: 1; background: #0f172a;
+    }
+    #canvas-container canvas { display: block; width: 100% !important; height: 100% !important; }
+
+    #top-bar {
+      position: absolute; top: 8px; left: 8px; right: 8px; z-index: 10;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px;
+      background: var(--bg-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--border); border-radius: 14px; padding: 8px 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .brand-clock { display: flex; align-items: center; gap: 10px; }
+    .world-badge {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      padding: 4px 8px; border-radius: 8px; font-weight: 700; font-size: 12px;
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .clock-display { font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
+    .clock-sub { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
+    .speed-controls { display: flex; align-items: center; gap: 4px; }
+
+    .btn {
+      background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 11px; font-size: 12px; font-weight: 600;
+      cursor: pointer; min-height: 36px; min-width: 38px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .btn:active { transform: scale(0.95); }
+    .btn.active { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+    .btn-danger { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5; }
+    .btn-success { background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.5); color: #86efac; }
+
+    #floating-tools {
+      position: absolute; top: 66px; right: 8px; z-index: 10;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+
+    #selected-pill {
+      position: absolute; top: 66px; left: 8px; z-index: 10;
+      background: var(--bg-glass); border: 1px solid var(--accent);
+      border-radius: 10px; padding: 6px 10px; font-size: 12px;
+      display: none; align-items: center; gap: 8px; max-width: calc(100vw - 75px);
+    }
+
+    #bottom-sheet {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
+      background: var(--bg-panel); border-top: 1px solid var(--border);
+      border-radius: 18px 18px 0 0; box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.55);
+      display: flex; flex-direction: column; height: 42vh; max-height: 68vh; min-height: 54px;
+      transition: height 0.25s ease;
+    }
+    #bottom-sheet.collapsed { height: 54px; }
+
+    .sheet-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 10px; border-bottom: 1px solid var(--border); min-height: 54px; flex-shrink: 0;
+    }
+    .nav-tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      background: transparent; color: var(--text-muted); border: none; border-radius: 8px;
+      padding: 8px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; min-height: 38px;
+    }
+    .tab-btn.active { background: rgba(56, 189, 248, 0.16); color: var(--accent); }
+    .sheet-body { flex: 1; overflow-y: auto; padding: 12px; -webkit-overflow-scrolling: touch; user-select: text; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .res-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 9px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+    }
+    .res-card.selected { border-color: var(--accent); background: rgba(56, 189, 248, 0.14); }
+    .res-card-header { display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 13px; }
+    .color-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255,255,255,0.5); }
+    .res-meta { font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 600; background: rgba(255,255,255,0.1); }
+
+    .inspector-box { background: rgba(15, 23, 42, 0.55); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+    .inspector-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .needs-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 10px 0; }
+    .need-item { background: var(--bg-card); padding: 7px 9px; border-radius: 8px; }
+    .need-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+    .progress-track { width: 100%; height: 7px; background: rgba(0, 0, 0, 0.4); border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.25s; }
+    .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin: 12px 0 6px 0; }
+    .list-compact { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .list-row { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; }
+    .stat-label { font-size: 11px; color: var(--text-muted); }
+    .stat-val { font-size: 16px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+    #error-banner {
+      position: fixed; top: 76px; left: 12px; right: 12px; z-index: 100;
+      background: rgba(153, 27, 27, 0.96); border: 1px solid #f87171; color: #fff;
+      padding: 12px 14px; border-radius: 12px; font-size: 13px; display: none;
+    }
+    #toast-banner {
+      position: fixed; top: 76px; left: 50%; transform: translateX(-50%); z-index: 90;
+      background: rgba(15, 23, 42, 0.92); border: 1px solid var(--accent); color: var(--text-main);
+      padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      pointer-events: none; opacity: 0; transition: opacity 0.25s;
+    }
+    input[type="file"] { display: none; }
+  </style>
+
+  <!-- Load Three.js via Standard Classic Script (No ImportMaps or ES Modules Required) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div id="error-banner">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <strong id="error-title">System Notice</strong>
+      <button class="btn" style="min-height:26px;padding:2px 8px;" onclick="document.getElementById('error-banner').style.display='none'">Dismiss</button>
+    </div>
+    <div id="error-msg" style="margin-top:4px;font-size:12px;line-height:1.4;"></div>
+  </div>
+  <div id="toast-banner"></div>
+
+  <header id="top-bar">
+    <div class="brand-clock">
+      <span class="world-badge">Oakridge Sim</span>
+      <div>
+        <span class="clock-display" id="hud-clock">Day 1, 07:00</span>
+        <span class="clock-sub" id="hud-pop">20 Pop</span>
+      </div>
+    </div>
+    <div class="speed-controls">
+      <button class="btn" id="btn-pause" title="Pause / Resume">⏸</button>
+      <button class="btn active" data-speed="1">1x</button>
+      <button class="btn" data-speed="5">5x</button>
+      <button class="btn" data-speed="20">20x</button>
+    </div>
+  </header>
+
+  <div id="selected-pill">
+    <span class="color-dot" id="pill-dot"></span>
+    <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+      <strong id="pill-name">Resident</strong> • <span id="pill-action" style="color:var(--accent)">Idle</span>
+    </div>
+    <button class="btn" id="btn-follow-toggle" style="min-height:26px;padding:3px 7px;font-size:11px;">Follow</button>
+    <button class="btn" id="btn-unselect" style="min-height:26px;padding:3px 7px;font-size:11px;">✕</button>
+  </div>
+
+  <div id="floating-tools">
+    <button class="btn" id="btn-cam-reset" title="Reset Camera">🎯</button>
+    <button class="btn" id="btn-cam-zoom-in" title="Zoom In">＋</button>
+    <button class="btn" id="btn-cam-zoom-out" title="Zoom Out">－</button>
+  </div>
+
+  <section id="bottom-sheet">
+    <div class="sheet-header">
+      <div class="nav-tabs">
+        <button class="tab-btn active" data-tab="tab-residents">👥 Residents</button>
+        <button class="tab-btn" data-tab="tab-events">📜 Timeline</button>
+        <button class="tab-btn" data-tab="tab-economy">💰 Economy</button>
+        <button class="tab-btn" data-tab="tab-diagnostics">🩺 Diagnostics</button>
+        <button class="tab-btn" data-tab="tab-system">💾 System</button>
+      </div>
+      <button class="btn" id="btn-sheet-toggle">▾</button>
+    </div>
+
+    <div class="sheet-body">
+      <div class="tab-pane active" id="tab-residents">
+        <div id="resident-inspector" style="display:none;"></div>
+        <div class="section-title" style="margin-top:0;">All Autonomous Residents (Tap to Inspect)</div>
+        <div class="res-grid" id="resident-list"></div>
+      </div>
+
+      <div class="tab-pane" id="tab-events">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span class="section-title" style="margin:0;">Live World Event Feed</span>
+          <span style="font-size:11px;color:var(--text-muted);" id="event-count-label">0 events</span>
+        </div>
+        <div class="list-compact" id="event-log-list" style="max-height:46vh;"></div>
+      </div>
+
+      <div class="tab-pane" id="tab-economy">
+        <div class="stat-cards" id="econ-summary-cards"></div>
+        <div class="section-title">Town Businesses & Employers</div>
+        <div class="list-compact" id="econ-business-list" style="max-height:240px;"></div>
+        <div class="section-title">Recent Ledger Transactions</div>
+        <div class="list-compact" id="econ-tx-list" style="max-height:220px;"></div>
+      </div>
+
+      <div class="tab-pane" id="tab-diagnostics">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span class="section-title" style="margin:0;">Real-Time Health & Invariants</span>
+          <button class="btn btn-success" id="btn-run-audit" style="min-height:30px;padding:4px 10px;">Run Self-Check</button>
+        </div>
+        <div class="stat-cards" id="diag-cards"></div>
+        <div class="section-title">Activity Breakdown</div>
+        <div id="diag-activities" class="list-compact" style="max-height:160px;"></div>
+        <div class="section-title">Recent System Warnings</div>
+        <div id="diag-errors" class="list-compact" style="max-height:140px;"></div>
+      </div>
+
+      <div class="tab-pane" id="tab-system">
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-label">Last Saved (IndexedDB)</div>
+            <div class="stat-val" id="sys-last-save" style="font-size:13px;">Ready</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Render Mode</div>
+            <div class="stat-val" style="margin-top:6px;">
+              <button class="btn" id="btn-quality-toggle" style="min-height:30px;width:100%;">3D Balanced</button>
+            </div>
+          </div>
+        </div>
+        <div class="section-title">World Persistence Controls</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <button class="btn btn-success" id="btn-save-now">💾 Save Now</button>
+          <button class="btn" id="btn-export-json">📤 Export Save JSON</button>
+          <button class="btn" id="btn-import-json">📥 Import Save JSON</button>
+          <input type="file" id="file-import-input" accept=".json,application/json" />
+          <button class="btn btn-danger" id="btn-reset-world">⚠️ Reset World</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Classic Standard JavaScript (Zero Module Blockers) -->
+  <script>
+  (function() {
+    "use strict";
+
+    var systemErrors = [];
+    function reportError(title, err) {
+      var msg = (err && err.message) ? err.message : String(err || 'Error');
+      console.error('[OakridgeSim]', title, err);
+      systemErrors.unshift({ time: new Date().toLocaleTimeString(), title: title, msg: msg });
+      if (systemErrors.length > 25) systemErrors.pop();
+      var b = document.getElementById('error-banner');
+      if (b) {
+        document.getElementById('error-title').textContent = title;
+        document.getElementById('error-msg').textContent = msg;
+        b.style.display = 'block';
+      }
+    }
+
+    function showToast(text) {
+      var t = document.getElementById('toast-banner');
+      if (!t) return;
+      t.textContent = text;
+      t.style.opacity = '1';
+      clearTimeout(t._tm);
+      t._tm = setTimeout(function() { t.style.opacity = '0'; }, 2600);
+    }
+
+    // Seeded PRNG
+    function SeededRNG(seed) {
+      this.state = (seed || 90210) >>> 0;
+      if (this.state === 0) this.state = 1;
+    }
+    SeededRNG.prototype.next = function() {
+      var t = (this.state += 0x6D2B79F5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      this.state = t >>> 0;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    SeededRNG.prototype.range = function(min, max) { return min + this.next() * (max - min); };
+    SeededRNG.prototype.int = function(min, max) { return Math.floor(this.range(min, max + 1)); };
+    SeededRNG.prototype.pick = function(arr) { return (!arr || !arr.length) ? null : arr[Math.floor(this.next() * arr.length)]; };
+
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    function fmtMoney(n) { return '$' + Math.round(n).toLocaleString(); }
+
+    // Map & Navigation Grid
+    var GRID_SIZE = 32;
+    var TILE_SCALE = 2.0;
+
+    function gridToWorld(gx, gz) {
+      return { x: (gx - GRID_SIZE / 2 + 0.5) * TILE_SCALE, z: (gz - GRID_SIZE / 2 + 0.5) * TILE_SCALE };
+    }
+    function worldToGrid(wx, wz) {
+      return {
+        gx: clamp(Math.floor(wx / TILE_SCALE + GRID_SIZE / 2), 0, GRID_SIZE - 1),
+        gz: clamp(Math.floor(wz / TILE_SCALE + GRID_SIZE / 2), 0, GRID_SIZE - 1)
+      };
+    }
+
+    var BUILDINGS = [
+      { id: 'home_1', name: 'Maple Apartments', type: 'home', gx: 4, gz: 4, w: 4, d: 3, h: 4.5, doorGx: 5, doorGz: 7, color: 0xe07a5f },
+      { id: 'home_2', name: 'Cedar Villas', type: 'home', gx: 10, gz: 4, w: 4, d: 3, h: 4.5, doorGx: 11, doorGz: 7, color: 0xf2cc8f },
+      { id: 'home_3', name: 'Pine Cottages', type: 'home', gx: 20, gz: 4, w: 4, d: 3, h: 4.0, doorGx: 21, doorGz: 7, color: 0xd4a373 },
+      { id: 'home_4', name: 'Birch Residences', type: 'home', gx: 25, gz: 4, w: 4, d: 3, h: 5.0, doorGx: 26, doorGz: 7, color: 0xe9c46a },
+      { id: 'home_5', name: 'Sunset Lofts', type: 'home', gx: 4, gz: 23, w: 4, d: 4, h: 5.2, doorGx: 6, doorGz: 22, color: 0xf4a261 },
+      { id: 'home_6', name: 'Harbor View Flats', type: 'home', gx: 24, gz: 23, w: 4, d: 4, h: 5.2, doorGx: 25, doorGz: 22, color: 0xe76f51 },
+      { id: 'biz_office_1', name: 'Apex Civic Tech', type: 'office', gx: 4, gz: 11, w: 4, d: 4, h: 7.5, doorGx: 8, doorGz: 13, color: 0x457b9d, openHour: 7, closeHour: 19, wagePerHour: 18 },
+      { id: 'biz_office_2', name: 'Beacon Logistics', type: 'office', gx: 24, gz: 11, w: 4, d: 4, h: 7.0, doorGx: 23, doorGz: 13, color: 0x2a9d8f, openHour: 8, closeHour: 20, wagePerHour: 17 },
+      { id: 'biz_grocery', name: 'FreshMart Grocery', type: 'grocery', gx: 10, gz: 23, w: 4, d: 4, h: 4.2, doorGx: 12, doorGz: 22, color: 0x52b788, openHour: 6, closeHour: 23, wagePerHour: 14, mealPrice: 12 },
+      { id: 'biz_bistro', name: 'Oakridge Bistro', type: 'restaurant', gx: 18, gz: 23, w: 4, d: 4, h: 4.2, doorGx: 19, doorGz: 22, color: 0xe63946, openHour: 7, closeHour: 24, wagePerHour: 15, mealPrice: 18 },
+      { id: 'pub_square', name: 'Central Town Square', type: 'public', gx: 13, gz: 12, w: 6, d: 6, h: 0.2, doorGx: 16, doorGz: 15, color: 0x94a3b8, walkableInterior: true },
+      { id: 'pub_park', name: 'Emerald Commons Park', type: 'public', gx: 11, gz: 18, w: 10, d: 3, h: 0.2, doorGx: 15, doorGz: 19, color: 0x40916c, walkableInterior: true }
+    ];
+
+    var navGrid = new Uint8Array(GRID_SIZE * GRID_SIZE);
+    var tileCost = new Float32Array(GRID_SIZE * GRID_SIZE);
+
+    function initNavGrid() {
+      navGrid.fill(0);
+      tileCost.fill(1.3);
+      for (var gz = 0; gz < GRID_SIZE; gz++) {
+        for (var gx = 0; gx < GRID_SIZE; gx++) {
+          var isRoadZ = (gz >= 7 && gz <= 9) || (gz >= 20 && gz <= 22);
+          var isRoadX = (gx >= 8 && gx <= 9) || (gx >= 22 && gx <= 23) || (gx >= 15 && gx <= 16);
+          if (isRoadZ || isRoadX) tileCost[gz * GRID_SIZE + gx] = 1.0;
+        }
+      }
+      for (var i = 0; i < BUILDINGS.length; i++) {
+        var b = BUILDINGS[i];
+        if (b.walkableInterior) continue;
+        for (var z = b.gz; z < b.gz + b.d; z++) {
+          for (var x = b.gx; x < b.gx + b.w; x++) {
+            if (x >= 0 && x < GRID_SIZE && z >= 0 && z < GRID_SIZE) navGrid[z * GRID_SIZE + x] = 1;
+          }
+        }
+        navGrid[b.doorGz * GRID_SIZE + b.doorGx] = 0;
+      }
+    }
+    initNavGrid();
+
+    function isWalkable(gx, gz) {
+      return gx >= 0 && gx < GRID_SIZE && gz >= 0 && gz < GRID_SIZE && navGrid[gz * GRID_SIZE + gx] === 0;
+    }
+
+    function findGridPath(startGx, startGz, endGx, endGz) {
+      if (!isWalkable(endGx, endGz)) {
+        var dirs = [[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,-1],[1,-1],[-1,1]];
+        for (var d = 0; d < dirs.length; d++) {
+          if (isWalkable(endGx + dirs[d][0], endGz + dirs[d][1])) {
+            endGx += dirs[d][0]; endGz += dirs[d][1]; break;
+          }
+        }
+      }
+      if (!isWalkable(endGx, endGz)) return null;
+      if (startGx === endGx && startGz === endGz) return [gridToWorld(endGx, endGz)];
+
+      var total = GRID_SIZE * GRID_SIZE;
+      var gScore = new Float32Array(total).fill(Infinity);
+      var fScore = new Float32Array(total).fill(Infinity);
+      var cameFrom = new Int16Array(total).fill(-1);
+      var closed = new Uint8Array(total);
+      var open = [];
+
+      var startIdx = startGz * GRID_SIZE + startGx;
+  
