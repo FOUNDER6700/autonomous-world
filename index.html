@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Autonomous World — 3D Civilization</title>
+  <style>
+    :root {
+      --bg-glass: rgba(15, 23, 42, 0.86);
+      --bg-panel: rgba(30, 41, 59, 0.96);
+      --bg-card: rgba(51, 65, 85, 0.65);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --success: #4ade80;
+      --warn: #fbbf24;
+      --danger: #f87171;
+      --border: rgba(148, 163, 184, 0.22);
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0f172a;
+      font-family: var(--font);
+      color: var(--text-main);
+      touch-action: none;
+    }
+
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Top HUD Bar */
+    #top-bar {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 8px 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .brand-clock {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .world-badge {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .clock-display {
+      font-variant-numeric: tabular-nums;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .clock-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    .speed-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn {
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 36px;
+      min-width: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    .btn.active {
+      background: var(--accent);
+      color: #0f172a;
+      border-color: var(--accent);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #fca5a5;
+    }
+
+    .btn-success {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #86efac;
+    }
+
+    /* Quick Floating Camera & Follow Pill */
+    #floating-tools {
+      position: absolute;
+      top: 66px;
+      right: 8px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Bottom Drawer */
+    #bottom-sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 20;
+      background: var(--bg-panel);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-top: 1px solid var(--border);
+      border-radius: 18px 18px 0 0;
+      box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.55);
+      display: flex;
+      flex-direction: column;
+      height: 44vh;
+      max-height: 68vh;
+      min-height: 54px;
+      transition: height 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    #bottom-sheet.collapsed {
+      height: 54px;
+    }
+
+    #bottom-sheet.expanded {
+      height: 66vh;
+    }
+
+    .sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      min-height: 54px;
+      flex-shrink: 0;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex: 1;
+    }
+
+    .nav-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      min-height: 38px;
+    }
+
+    .tab-btn.active {
+      background: rgba(56, 189, 248, 0.16);
+      color: var(--accent);
+    }
+
+    .sheet-toggle {
+      margin-left: 6px;
+      flex-shrink: 0;
+    }
+
+    .sheet-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      -webkit-overflow-scrolling: touch;
+      user-select: text;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    /* Resident Directory & Inspector */
+    .res-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      gap: 8px;
+    }
+
+    .res-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: border-color 0.15s;
+    }
+
+    .res-card.selected {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.14);
+    }
+
+    .res-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .color-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      display: inline-block;
+      border: 1px solid rgba(255,255,255,0.5);
+    }
+
+    .res-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* Inspector Detail View */
+    .inspector-box {
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .inspector-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .needs-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .need-item {
+      background: var(--bg-card);
+      padding: 7px 9px;
+      border-radius: 8px;
+    }
+
+    .need-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 7px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.25s;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin: 12px 0 6px 0;
+    }
+
+    .list-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .list-row {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 11px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .stat-val {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 3px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Toast & Error Banner */
+    #error-banner {
+      position: fixed;
+      top: 70px;
+      left: 12px;
+      right: 12px;
+      z-index: 100;
+      background: rgba(153, 27, 27, 0.95);
+      border: 1px solid #f87171;
+      color: #fff;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      display: none;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+    }
+
+    #toast-banner {
+      position: fixed;
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 90;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid var(--accent);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+
+    /* Floating Selected Resident Banner on Canvas */
+    #selected-pill {
+      position: absolute;
+      top: 66px;
+      left: 8px;
+      z-index: 10;
+      background: var(--bg-glass);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 12px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      max-width: calc(100vw - 75px);
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+  </style>
+
+  <!-- Pinned Three.js CDN Import Map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <!-- 3D Viewport -->
+  <div id="canvas-container"></div>
+
+  <!-- Error & Toast Notifications -->
+  <div id="error-banner">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <strong id="error-title">System Alert</strong>
+      <button class="btn" style="min-height:26px;padding:2px 8px;" onclick="document.getElementById('error-banner').style.display='none'">Dismiss</button>
+    </div>
+    <div id="error-msg" style="margin-top:4px;font-size:12px;"></div>
+  </div>
+  <div id="toast-banner"></div>
+
+  <!-- Top Observer Bar -->
+  <header id="top-bar">
+    <div class="brand-clock">
+      <span class="world-badge">Oakridge Sim</span>
+      <div>
+        <span class="clock-display" id="hud-clock">Day 1, 07:00</span>
+        <span class="clock-sub" id="hud-pop">20 Pop</span>
+      </div>
+    </div>
+    <div class="speed-controls">
+      <button class="btn" id="btn-pause" title="Pause / Resume">⏸</button>
+      <button class="btn active" data-speed="1">1x</button>
+      <button class="btn" data-speed="5">5x</button>
+      <button class="btn" data-speed="20">20x</button>
+    </div>
+  </header>
+
+  <!-- Selected Resident Floating Pill -->
+  <div id="selected-pill">
+    <span class="color-dot" id="pill-dot"></span>
+    <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+      <strong id="pill-name">Resident</strong> • <span id="pill-action" style="color:var(--accent)">Idle</span>
+    </div>
+    <button class="btn" id="btn-follow-toggle" style="min-height:26px;padding:3px 7px;font-size:11px;">Follow</button>
+    <button class="btn" id="btn-unselect" style="min-height:26px;padding:3px 7px;font-size:11px;">✕</button>
+  </div>
+
+  <!-- Floating Camera Quick Controls -->
+  <div id="floating-tools">
+    <button class="btn" id="btn-cam-reset" title="Reset Camera">🎯</button>
+    <button class="btn" id="btn-cam-zoom-in" title="Zoom In">＋</button>
+    <button class="btn" id="btn-cam-zoom-out" title="Zoom Out">－</button>
+  </div>
+
+  <!-- Bottom Observer Sheet -->
+  <section id="bottom-sheet">
+    <div class="sheet-header">
+      <div class="nav-tabs">
+        <button class="tab-btn active" data-tab="tab-residents">👥 Residents</button>
+        <button class="tab-btn" data-tab="tab-events">📜 Timeline</button>
+        <button class="tab-btn" data-tab="tab-economy">💰 Economy</button>
+        <button class="tab-btn" data-tab="tab-diagnostics">🩺 Diagnostics</button>
+        <button class="tab-btn" data-tab="tab-system">💾 System</button>
+      </div>
+      <button class="btn sheet-toggle" id="btn-sheet-toggle" title="Expand / Collapse Panel">▾</button>
+    </div>
+
+    <div class="sheet-body">
+      <!-- TAB 1: RESIDENTS & INSPECTOR -->
+      <div class="tab-pane active" id="tab-residents">
+        <div id="resident-inspector" style="display:none;"></div>
+        <div class="section-title" style="margin-top:0;">All Autonomous Residents (Tap to Inspect)</div>
+        <div class="res-grid" id="resident-list"></div>
+      </div>
+
+      <!-- TAB 2: EVENT TIMELINE -->
+      <div class="tab-pane" id="tab-events">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span class="section-title" style="margin:0;">Live World Event Feed</span>
+          <span style="font-size:11px;color:var(--text-muted);" id="event-count-label">0 events</span>
+        </div>
+        <div class="list-compact" id="event-log-list" style="max-height:46vh;"></div>
+      </div>
+
+      <!-- TAB 3: ECONOMY & BUSINESSES -->
+      <div class="tab-pane" id="tab-economy">
+        <div class="stat-cards" id="econ-summary-cards"></div>
+        <div class="section-title">Town Businesses & Employers</div>
+        <div class="list-compact" id="econ-business-list" style="max-height:240px;"></div>
+        <div class="section-title">Recent Ledger Transactions</div>
+        <div class="list-compact" id="econ-tx-list" style="max-height:220px;"></div>
+      </div>
+
+      <!-- TAB 4: DIAGNOSTICS & VALIDATION -->
+      <div class="tab-pane" id="tab-diagnostics">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span class="section-title" style="margin:0;">Real-Time Health & Invariants</span>
+          <button class="btn btn-success" id="btn-run-audit" style="min-height:30px;padding:4px 10px;">Run Self-Check</button>
+        </div>
+        <div class="stat-cards" id="diag-cards"></div>
+        <div class="section-title">Activity Breakdown</div>
+        <div id="diag-activities" class="list-compact" style="max-height:160px;"></div>
+        <div class="section-title">Recent System & Validation Warnings</div>
+        <div id="diag-errors" class="list-compact" style="max-height:140px;"></div>
+      </div>
+
+      <!-- TAB 5: PERSISTENCE & SETTINGS -->
+      <div class="tab-pane" id="tab-system">
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-label">Last Saved (IndexedDB)</div>
+            <div class="stat-val" id="sys-last-save" style="font-size:13px;">Never</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Render Quality</div>
+            <div class="stat-val" style="margin-top:6px;">
+              <button class="btn" id="btn-quality-toggle" style="min-height:30px;width:100%;">Balanced (Mobile)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">World Persistence Controls</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <button class="btn btn-success" id="btn-save-now">💾 Save Now</button>
+          <button class="btn" id="btn-export-json">📤 Export Save JSON</button>
+          <button class="btn" id="btn-import-json">📥 Import Save JSON</button>
+          <input type="file" id="file-import-input" accept=".json,application/json" />
+          <button class="btn btn-danger" id="btn-reset-world">⚠️ Reset World</button>
+        </div>
+
+        <div class="inspector-box" style="font-size:12px;color:var(--text-muted);line-height:1.5;">
+          <strong>Observer Architecture Note:</strong><br/>
+          • Every resident executes an independent utility AI + A* grid navigation loop.<br/>
+          • Economy is strictly conservation-tracked: wages, wholesale deliveries, retail food purchases, and B2B office contracts debit and credit exact accounts.<br/>
+          • Auto-saves to IndexedDB every 25 seconds and on tab hide.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Application Script -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    /*************************************************************************
+     * 1. GLOBAL ERROR HANDLING & UI NOTIFICATIONS
+     *************************************************************************/
+    const systemErrors = [];
+
+    function reportError(title, err) {
+      const msg = err && err.message ? err.message : String(err);
+      console.error(`[AutonomousWorld Error] ${title}:`, err);
+      systemErrors.unshift({ time: new Date().toLocaleTimeString(), title, msg });
+      if (systemErrors.length > 30) systemErrors.pop();
+
+      const banner = document.getElementById('error-banner');
+      const titleEl = document.getElementById('error-title');
+      const msgEl = document.getElementById('error-msg');
+      if (banner && titleEl && msgEl) {
+        titleEl.textContent = title;
+        msgEl.textContent = msg;
+        banner.style.display = 'block';
+      }
+    }
+
+    function showToast(text) {
+      const toast = document.getElementById('toast-banner');
+      if (!toast) return;
+      toast.textContent = text;
+      toast.style.opacity = '1';
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => {
+        toast.style.opacity = '0';
+      }, 2600);
+    }
+
+    window.addEventListener('error', (e) => {
+      reportError('Runtime Exception', e.error || e.message);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      reportError('Unhandled Promise Rejection', e.reason);
+    });
+
+    /*************************************************************************
+     * 2. SEEDED PRNG & MATH HELPERS
+     *************************************************************************/
+    class SeededRNG {
+      constructor(seed = 1337420) {
+        this.state = seed >>> 0;
+        if (this.state === 0) this.state = 1;
+      }
+      next() {
+        let t = (this.state += 0x6D2B79F5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        this.state = t >>> 0;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      }
+      range(min, max) {
+        return min + this.next() * (max - min);
+      }
+      int(min, max) {
+        return Math.floor(this.range(min, max + 1));
+      }
+      pick(arr) {
+        if (!arr || arr.length === 0) return null;
+        return arr[Math.floor(this.next() * arr.length)];
+      }
+    }
+
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+    const fmtMoney = (n) => '$' + Math.round(n).toLocaleString();
+
+    /*************************************************************************
+     * 3. WORLD MAP, BUILDINGS & A* GRID NAVIGATION
+     *************************************************************************/
+    const GRID_SIZE = 32; // 32x32 tiles (-16 to +15 in world space, 2m per tile)
+    const TILE_SCALE = 2.0;
+
+    function gridToWorld(gx, gz) {
+      return {
+        x: (gx - GRID_SIZE / 2 + 0.5) * TILE_SCALE,
+        z: (gz - GRID_SIZE / 2 + 0.5
